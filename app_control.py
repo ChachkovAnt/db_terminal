@@ -1,5 +1,5 @@
 from app_UI import UI, NameValDialog
-from PyQt5.QtWidgets import QTreeWidgetItem, QWidget, QMessageBox
+from PyQt5.QtWidgets import QTreeWidgetItem, QMessageBox
 from PyQt5.QtCore import Qt
 
 
