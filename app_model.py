@@ -78,15 +78,12 @@ class DBStorage:
         self.storage = dict()
 
     def add_item(self, item):
-        if self.storage.get(item.parent):
+        self.find_relatives(self.storage, item)             # Search relatives
+        if self.storage.get(item.parent):                   # Check for deleted parent.
             if self.storage[item.parent].deleted:
-                return
+                self.del_item(item.id)                      # Delete myself and delete all my children
+        self.storage[item.id] = item                        # Add in storage with new relatives
 
-        self.find_relatives(self.storage, item)
-        if self.storage.get(item.id):
-            item.deleted = self.storage[item.id].deleted
-
-        self.storage[item.id] = item
 
     def del_item(self, item_id):
         if item_id in self.storage:
@@ -128,7 +125,10 @@ class DBStorage:
         return self.storage[str(item_id)].pack_raw(is_copy=False)
 
     def receive_item(self, item):
-        self.add_item(item)
+        try:
+            self.add_item(item)
+        except ReferenceError:
+            raise
 
     def reset(self):
         self.__init__()
@@ -151,10 +151,6 @@ class RemoteDB(DBStorage):
                 self.add_item(node)
 
     def add_item(self, item):
-        if self.storage.get(item.parent):
-            if self.storage[item.parent].deleted:
-                item.deleted = True
-
         self.find_relatives(self.storage, item)
         self.storage[item.id] = item
         if item.deleted:
@@ -175,20 +171,42 @@ class DBManager(QObject):
 
     # Реализация выкачивания из удаленной базы по одному элементу
     def pull(self, item_id):
-        self.local_storage.receive_item(Node(self.remote_storage.get_item(item_id)))
+        item = Node(self.remote_storage.get_item(item_id))
+        self.local_storage.receive_item(item)
         return 'local', self.get_local_storage()
 
     # Реализация слияния локального кэша и удаленной базы
     def commit(self):
+
+        get_loc = lambda item_id: self.remote_storage.storage.get(item_id)
+
         for item_id, item in self.local_storage.storage.items():
+            # if not get_loc(item_id).deleted:
             self.remote_storage.receive_item(copy(item))
+
+        self.renew_local()  # Renew local tree after commit
+
         return 'remote', self.get_remote_storage()
 
-    def add_item(self, item):
-        item['id'] = next(self.gen)
-        item = Node(item)
-        self.local_storage.add_item(item)
+    def add_item(self, item_raw):
+        parent = self.local_storage.storage.get(item_raw['parent'])  # Get the parent
+        is_par_del = parent.deleted if parent else False             # Write parent check expression in var
+
+        if not is_par_del:                      # If parent wasn't been deleted add new node
+            item_raw['id'] = next(self.gen)
+            item = Node(item_raw)
+            self.local_storage.add_item(item)
         return 'local', self.get_local_storage()
+
+    def renew_local(self):
+        """
+        Renew local tree
+        :return: None
+        """
+        for item_id, item_raw in self.local_storage:
+            store = self.remote_storage.storage
+            if item_id in store:
+                self.pull(item_id)
 
     def change_item(self, item_id, **kwargs):
         self.local_storage.change_item_volatile(item_id, **kwargs)
@@ -219,3 +237,12 @@ class DBManager(QObject):
 
     def get_local_storage(self):
         return dict(self.local_storage)
+
+    def is_deleted(self, item_id, store='local'):
+        if store == 'local':
+            deleted = self.local_storage.storage[item_id].deleted
+        else:
+            deleted = self.remote_storage.storage[item_id].deleted
+
+        return deleted
+

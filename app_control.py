@@ -1,5 +1,5 @@
 from app_UI import UI, NameValDialog
-from PyQt5.QtWidgets import QTreeWidgetItem
+from PyQt5.QtWidgets import QTreeWidgetItem, QWidget, QMessageBox
 from PyQt5.QtCore import Qt
 
 
@@ -170,9 +170,10 @@ class MyApp(UI):
         :return: None
         """
         if self.get_current_id(tree='local'):
-            self.download_btn.setEnabled(False)
             self.dlg = self.show_dialog()
-            self.dlg.resultOk.connect(self.send_changes)
+            if self.dlg:
+                self.dlg.resultOk.connect(self.send_changes)
+                self.download_btn.setEnabled(False)
 
     def on_apply_btn_clicked(self):
         """
@@ -180,6 +181,8 @@ class MyApp(UI):
         :return: None
         """
         tree, data = self.db_control.commit()
+        self.renew_tree(tree, data)
+        tree, data = 'local', self.db_control.get_local_storage()
         self.renew_tree(tree, data)
         self.download_btn.setEnabled(True)
 
@@ -197,10 +200,18 @@ class MyApp(UI):
         Shows dialog for input name/value.
         :return: dia - dialog object(QWidget)
         """
+        item_id = self.get_current_id(tree='local')
         default_name = self.get_current_name()
         default_val = self.get_current_value()
 
-        dia = NameValDialog(default_name, default_val)
+        deleted = self.db_control.is_deleted(item_id, store='local')
+
+        if deleted:
+            warn_text = 'Id{} was deleted. You can not change name or value.'.format(item_id)
+            QMessageBox.critical(self, 'Message', warn_text)
+            dia = None
+        else:
+            dia = NameValDialog(default_name, default_val)
 
         return dia
 
