@@ -4,7 +4,9 @@ from PyQt5.QtWidgets import (QWidget, QPushButton, QDesktopWidget, QTreeWidget,
 
 
 class UI(QWidget):
-
+    """
+    Main window class. Include QPushButtons and QTreeViewWidgets.
+    """
     def __init__(self):
         super().__init__()
 
@@ -84,7 +86,11 @@ class UI(QWidget):
 
 
 class NameValDialog(QWidget):
-
+    """
+    Dialog window class. This dialog can change name and value.
+    It shows default values in lineEdits, when starts.
+    It have two lineEdit widgets and two buttons - OK and CANCEL.
+    """
     resultOk = pyqtSignal(str, str)
 
     def __init__(self, default_name='', default_val=''):
