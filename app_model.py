@@ -1,14 +1,24 @@
 import json
 from copy import copy
 from random import randint
-from PyQt5.QtCore import pyqtSignal, QObject
 
 
-# Create node class
 class Node:
-
+    """
+    Class Node describes the simplest entity in tree.
+    """
     def __init__(self, kwargs):
+        """
+        Node initializes using kwarg dictionary. It means that you need to pass argument like this:
+        {'parent' = '3'}, !!!! not like (parent='3') !!!!
 
+        Node have 6 attributes:
+        Name - name of node. It is a volatile cell, can be changed by user.
+        Value - string value. It is a volatile cell, can be changed by user.
+        Id - identificator which must be unique in base.
+        Parent - contents id of parent. It can not be changed or deleted. If parent None -> node is root.
+        Children - contents list of children. By default it is a empty list if children didn't set from the outside.
+        """
         self.deleted = True if self.parse_arg('deleted', kwargs) else False
 
         self.id = str(self.parse_arg('id', kwargs))
@@ -19,6 +29,10 @@ class Node:
         self.value = str(self.parse_arg('value', kwargs))
 
     def print_node(self):
+        """
+        It used for printing node content in stdout just for debugging model.
+        :return: None
+        """
         if not self.deleted:
             print('id{}:'.format(self.id))
             print('\tname = {}'.format(self.name))
@@ -37,24 +51,51 @@ class Node:
             return []
 
     def set_value(self, value):
+        """
+        Setting value. If value did not passed, empty string sets to.
+        :param value: str
+        :return: None
+        """
         if not self.deleted:
             self.value = value if value else ''
 
     def set_name(self, name):
+        """
+        Name setter. If name did not passed, 'default_nameNUM' sets to.
+        :param name: str
+        :return: name
+        """
         default_name = 'default_name' + self.id
         self.name = name if name else default_name
         return self.name
 
     def set_child(self, child):
+        """
+        Appends child in children list
+        :param child: str
+        :return: None
+        """
         self.children.append(child)
 
     def del_node(self):
+        """
+        Make current item deleted.
+        :return: None
+        """
         self.deleted = True
 
-    # Можно объявить статик методом и создавать новый дефолтный узел
     # По умолчанию мы генерируем узел для копии, однако так же можем
     # сгенерировать новый узел в локальном кэше
     def pack_raw(self, is_copy=True, parent=None, new_id=None):
+        """
+        Casting Node object to dict(). It used to make a local copy of remote node or transmit between bases. If you
+        need to really transmit it to socket for ex., you can simply create json and transmit it where you need.
+
+        :param is_copy: True - if it used for make copy.
+        :param parent: if parent did not passed, sets parent from self.parent.
+        :param new_id: if id did not passed, sets id from self.id.
+        :return: raw_node - item in dictionary format, where attributes
+        """
         raw_node = dict()
         raw_node['id'] = str(new_id) if new_id else self.id
         raw_node['parent'] = parent if parent else self.parent
@@ -73,19 +114,34 @@ class Node:
 
 
 class DBStorage:
-
+    """
+    Class DBStorage describes local cache.
+    """
     def __init__(self):
         self.storage = dict()
 
     def add_item(self, item):
+        """
+        Adding item into local cache.
+        :param item: Node class.
+        :return: None
+        """
         self.find_relatives(self.storage, item)             # Search relatives
+        self.storage[item.id] = item                        # Add in storage with new relatives
+
         if self.storage.get(item.parent):                   # Check for deleted parent.
             if self.storage[item.parent].deleted:
                 self.del_item(item.id)                      # Delete myself and delete all my children
-        self.storage[item.id] = item                        # Add in storage with new relatives
 
+        if item.deleted:
+            self.del_item(item.id)
 
     def del_item(self, item_id):
+        """
+        Making delete itself and all of its children.
+        :param item_id: id of item, which must be deleted
+        :return: None
+        """
         if item_id in self.storage:
             self.storage[item_id].del_node()
             for child_id in self.storage[item_id].children:
@@ -94,24 +150,32 @@ class DBStorage:
     @staticmethod
     def find_relatives(storage, item):
         """
-            find_relatives(storage, item) находит всех родителей и детей в storage для item
+        Finds parent and all the children in storage for item.
+        :param storage: dict()
+        :param item: Node()
+        :return: None
         """
         if item.parent in storage.keys() and item.id not in storage[item.parent].children:
             storage[item.parent].set_child(item.id)
 
-        # Ищем детей перебором по всему кэшу, если находим, добаляем в свой список детей
         for item_id, item_node in storage.items():
             if item_node.parent == item.id and item_id not in item.children:
                 item.set_child(item_node.id)
 
     def print_cache(self):
         """
-        print_cache() выводит все сождержимое базы в stdout
+        Prints all nodes in stdout
         """
         for key in self.storage:
             self.storage[key].print_node()
 
     def change_item_volatile(self, item_id, **kwargs):
+        """
+        Changes item's name and value or sets their defaults. It is no action, if node has been deleted.
+        :param item_id: str
+        :param kwargs: key-val pair like: name='name', value='value'
+        :return: None
+        """
         if not self.storage[item_id].deleted:
             if 'name' in kwargs:
                 self.storage[item_id].set_name(str(kwargs['name']))
@@ -122,77 +186,99 @@ class DBStorage:
             return
 
     def get_item(self, item_id):
+        """
+        Gets Node in dict() format with children.
+        :param item_id: str item_id
+        :return: dict(Node)
+        """
         return self.storage[str(item_id)].pack_raw(is_copy=False)
 
     def receive_item(self, item):
-        try:
-            self.add_item(item)
-        except ReferenceError:
-            raise
+        """
+        :param item: dict() raw_node
+        :return: None
+        """
+        self.add_item(item)
 
     def reset(self):
+        """
+        Resets cache
+        :return: None
+        """
         self.__init__()
 
     def __iter__(self):
         return ((id, item.pack_raw(is_copy=False)) for (id, item) in self.storage.items())
 
 
-# Унаследуем класс DBStorage, для реализации удаленной базы данных
 class RemoteDB(DBStorage):
+    """
+    Class RemoteDB inherits from DBStorage, because their behavior are similar.
+    """
     def __init__(self):
+        """
+        Inits as like superclass and then loads default database from .txt file.
+        """
         DBStorage.__init__(self)
         self.parse_json()
 
     def parse_json(self):
+        """
+        Loads default database from file "db.txt"
+        :return: None
+        """
         with open('db.txt', 'r') as db:
             raw_dict = json.loads(db.read())
             for key, val in raw_dict.items():
                 node = Node(val)
                 self.add_item(node)
 
-    def add_item(self, item):
-        self.find_relatives(self.storage, item)
-        self.storage[item.id] = item
-        if item.deleted:
-            self.del_item(item.id)
 
-
-# Создадим класс менеджера данных, который будет скачивать и сливать данные из баз.
-class DBManager(QObject):
-
-    treeChanged = pyqtSignal(str, dict)
-
-    # Затолкаем внутрь локальный кэш
+class DBManager:
+    """
+    Class DBManager describes relations between local cache and remote database
+    """
     def __init__(self):
+        """
+        Inits DBStorage and RemoteDB instances. Makes ID generator for randomize new ids.
+        """
         super().__init__()
         self.local_storage = DBStorage()
         self.remote_storage = RemoteDB()
         self.gen = self.id_gen()
 
-    # Реализация выкачивания из удаленной базы по одному элементу
     def pull(self, item_id):
+        """
+        One-by-one download implementation
+        :param item_id: str
+        :return: 'local', storage
+        """
         item = Node(self.remote_storage.get_item(item_id))
         self.local_storage.receive_item(item)
         return 'local', self.get_local_storage()
 
     # Реализация слияния локального кэша и удаленной базы
     def commit(self):
-
-        get_loc = lambda item_id: self.remote_storage.storage.get(item_id)
-
+        """
+        Pushes and updates to remote database all cached items.
+        :return: 'remote', storage
+        """
         for item_id, item in self.local_storage.storage.items():
-            # if not get_loc(item_id).deleted:
             self.remote_storage.receive_item(copy(item))
-
         self.renew_local()  # Renew local tree after commit
 
         return 'remote', self.get_remote_storage()
 
     def add_item(self, item_raw):
+        """
+        Adds new item in cache. Must be called by user through the UI.
+        :param item_raw: dict(Node)
+        :return: 'local', storage
+        """
         parent = self.local_storage.storage.get(item_raw['parent'])  # Get the parent
         is_par_del = parent.deleted if parent else False             # Write parent check expression in var
 
-        if not is_par_del:                      # If parent wasn't been deleted add new node
+        if not is_par_del:                      # If parent hasn't been deleted add new node
             item_raw['id'] = next(self.gen)
             item = Node(item_raw)
             self.local_storage.add_item(item)
@@ -200,31 +286,48 @@ class DBManager(QObject):
 
     def renew_local(self):
         """
-        Renew local tree
+        Renew local tree when commit changes in remote tree
         :return: None
         """
+        store = self.remote_storage.storage
         for item_id, item_raw in self.local_storage:
-            store = self.remote_storage.storage
             if item_id in store:
                 self.pull(item_id)
 
     def change_item(self, item_id, **kwargs):
+        """
+        Changes item's volitile values(Name/Value). Must be called by user through the UI.
+        :param item_id: str
+        :param kwargs: pairs of params: name='name', value='value'
+        :return: 'local', storage
+        """
         self.local_storage.change_item_volatile(item_id, **kwargs)
-        # self.treeChanged.emit('local', self.get_local_storage())
         return 'local', self.get_local_storage()
 
     def del_item(self, item_id):
+        """
+        Makes item deleted. Must be called by user through the UI.
+        :param item_id: str
+        :return: 'local', tree
+        """
         self.local_storage.del_item(str(item_id))
-        # self.treeChanged.emit('local', self.get_local_storage())
         return 'local', self.get_local_storage()
 
     def id_gen(self):
+        """
+        Random ID generator. Generation range from 0 to 65535.
+        :return: id
+        """
         while True:
             idg = randint(0, 0xffff)
             if str(idg) not in self.remote_storage.storage.keys():
                 yield str(idg)
 
     def reset(self):
+        """
+        Resets views and bases. Must be called by user through the UI.
+        :return: 'all' (command for reset treeViews)
+        """
         self.remote_storage.reset()
         self.local_storage.reset()
         return 'all'
@@ -239,6 +342,12 @@ class DBManager(QObject):
         return dict(self.local_storage)
 
     def is_deleted(self, item_id, store='local'):
+        """
+        Is deleted check.
+        :param item_id: str
+        :param store: 'local' or 'remote'
+        :return: bool (deleted --> True)
+        """
         if store == 'local':
             deleted = self.local_storage.storage[item_id].deleted
         else:
