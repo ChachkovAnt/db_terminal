@@ -84,8 +84,6 @@ class Node:
         """
         self.deleted = True
 
-    # По умолчанию мы генерируем узел для копии, однако так же можем
-    # сгенерировать новый узел в локальном кэше
     def pack_raw(self, is_copy=True, parent=None, new_id=None):
         """
         Casting Node object to dict(). It used to make a local copy of remote node or transmit between bases. If you
@@ -227,7 +225,7 @@ class RemoteDB(DBStorage):
         Loads default database from file "db.txt"
         :return: None
         """
-        with open('db.txt', 'r') as db:
+        with open('database//db.txt', 'r') as db:
             raw_dict = json.loads(db.read())
             for key, val in raw_dict.items():
                 node = Node(val)
@@ -257,7 +255,6 @@ class DBManager:
         self.local_storage.receive_item(item)
         return 'local', self.get_local_storage()
 
-    # Реализация слияния локального кэша и удаленной базы
     def commit(self):
         """
         Pushes and updates to remote database all cached items.

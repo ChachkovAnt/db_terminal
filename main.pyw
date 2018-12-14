@@ -1,7 +1,7 @@
 import sys
 from PyQt5.QtWidgets import QApplication
-from app_control import MyApp
-from app_model import DBManager
+from src.app_control import MyApp
+from src.app_model import DBManager
 
 
 def except_hook(cls, exception, traceback):
